@@ -1,4 +1,4 @@
-
+#ifdef WIN32
 #pragma comment(lib,"Qt5Core.lib")
 #pragma comment(lib,"Qt5Gui.lib")
 #pragma comment(lib,"Qt5Widgets.lib")
@@ -26,3 +26,4 @@
 #pragma comment(lib,"odbc32.lib")
 #pragma comment(lib,"odbccp32.lib")
 #pragma comment(lib,"strmiids.lib")
+#endif // WIN32

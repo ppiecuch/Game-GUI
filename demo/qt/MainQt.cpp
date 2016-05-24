@@ -13,14 +13,17 @@
 
 #include <QtWidgets/QApplication>
 #include <QtWidgets/QFileDialog>
+#include <QtWidgets/QMessageBox>
+#include <QtWidgets/QOpenGLWidget>
 #include <QtGui/QMouseEvent>
 #include <QtCore/QTimer.h>
+#include <QDebug>
+
 #include "libsqt.h"
-
 #include "gui.h"
+#include "fbo.h"
 
-#include <QtOpenGL/QGLWidget>
-
+#include <assert.h>
 #include <string>
 
 void init_gui()
@@ -28,6 +31,8 @@ void init_gui()
 	gui.init( Gui::Flags::CONTEXT_MENU ,
 				"../data/gui_global.txt" , 
 				"../data/gui_skin.txt");
+
+	qDebug() << "*** gui.init done";
 
 	// Main Window
 
@@ -56,9 +61,11 @@ void init_gui()
 	w.combo ["cb"]=Gui::Combo(120,100,60,20);
 	w.combo ["cb"].add_item("test");
 	w.combo ["cb"].add_item(L"東京");
+	w.combo ["cb"].set_selected(1);
 	w.combo ["cb"].callback_selected=
-		[](Gui::Window *w,Gui::Button* control,int index) // text entered callback example
+		[](Gui::Window *w, Gui::Button* control, int index) // text entered callback example
 		{
+			if (!w) return; if (!control) return;
 			Gui::Combo &c=*(Gui::Combo*)control;
 			w->label["l"].text=Gui::String( c.selected ) + "  selected";
 			w->label["l"].textcolor=vec4f(1,0,0,1);
@@ -82,7 +89,7 @@ void init_gui()
 	w.radio["rad"].callback_pressed=
 		[](Gui::Window *w,Gui::Button* control,int index)
 		{	
-			w->x+=10;
+			w->x += 10;
 		};
 
 	// Add Slider
@@ -113,7 +120,7 @@ void init_gui()
 					// file dialog ok button callback
 					[](Gui::Window *w,Gui::Button* b,int index) 
 					{		
-						MessageBoxA(0, 
+						QMessageBox::information(0, 
 							w->textedit["Filename"].text.c_str() , 
 							w->label["dir"].text.c_str() ,0);		
 						w->close(); 			
@@ -197,8 +204,8 @@ void init_gui()
 	t.add_tab("Win4");
 	loopi(0,4)
 	{
-		t.window[i].button.add(Gui::Button("OK",20+i*10,20,60));
-		t.window[i].label["lab"] =Gui::Label("some text",20+i*20,90,100);
+		Gui::Button b=Gui::Button("OK",20+i*10,20,60); t.window[i].button.add(b);
+		t.window[i].label["lab"]=Gui::Label("some text",20+i*20,90,100);
 		t.window[i].button["test2"]=Gui::Button("OK",100+i*10,20,60);
 		t.window[i].button["test3"]=Gui::Button("OK",50+i*10,50,60);
 	}
@@ -206,8 +213,8 @@ void init_gui()
 	gui.screen[0].tab["mytab"]=t;
 
 
-	// -------------------------------------------------------------------------
 	// Simple 3D Viewer
+	// -------------------------------------------------------------------------
 
 	// Add simple Renderer
 	{
@@ -227,6 +234,10 @@ void init_gui()
 
 			bool draw= (b.hover||b.pressed) && (gui.mouse.button[0] || gui.mouse.button[1] || gui.mouse.wheel!=0);
 			if(control!=&b)draw=1;
+
+			printf("*** b.pressed %d\n", b.pressed);
+			printf("*** gui.mouse.button[0] %d\n", gui.mouse.button[0]);
+			printf("*** gui.mouse.button[1] %d\n", gui.mouse.button[1]);
 		
 			void *fb=b.var.ptr["fbo"]; if(!fb) return;
 			FBO &fbo=*(FBO*)fb;
@@ -250,10 +261,10 @@ void init_gui()
 				q=qy*qx*q;
 				b.var.vec4["rotation"]=vec4f(q.x,q.y,q.z,q.w);
 			}
-			double z=b.var.number["zoom"];
+			float z=b.var.number["zoom"];
 			if(b.hover)										// zoom by wheel
 			{
-				z=clamp( z-gui.mouse.wheel*2 , 2,120 );
+				z=clamp( z-gui.mouse.wheel*2.f,2.f,120.f );
 				b.var.number["zoom"]=z;
 				gui.mouse.wheel=0;
 			}
@@ -270,9 +281,9 @@ void init_gui()
 			glClearColor(0.7,0.7,0.7,1);
 			glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);
 			glMatrixMode(GL_PROJECTION);glPushMatrix();glLoadIdentity();
-			gluPerspective(z, (GLfloat)b.sx/(GLfloat)b.sy, 0.01 , 10.0);
+			glPerspective(z, (GLfloat)b.sx/(GLfloat)b.sy, 0.01 , 10.0);
 			glMatrixMode(GL_MODELVIEW);glPushMatrix();glLoadIdentity();
-			glTranslatef(pos.x,pos.y,-pos.z);		// apply movement
+			glTranslatef(pos.x,pos.y,-pos.z); // apply movement
 			matrix44 m4(q);
 			glMultMatrixf(&m4.m[0][0]);	// apply quaternion rotation
 
@@ -318,9 +329,13 @@ void exit_gui()
 	gui.exit();
 }
 ////////////////////////////////////////////////////////////////////////////////
-class GLWidget : public QGLWidget {
+class GLWidget : public QOpenGLWidget {
 
     Q_OBJECT // must include this if you use Qt signals/slots
+
+public:
+	int cursorX();
+	int cursorY();
 
 public:
     GLWidget(QWidget *parent = NULL);
@@ -329,6 +344,7 @@ protected:
     void initializeGL();
     void resizeGL(int w, int h);
     void paintGL();
+    void timerEvent(QTimerEvent *);
 	void wheelEvent(QWheelEvent* event);
     void mousePressEvent(QMouseEvent *event);
     void mouseReleaseEvent(QMouseEvent *event);
@@ -337,26 +353,25 @@ protected:
 	void keyReleaseEvent(QKeyEvent* event) ;
 	void closeEvent(QCloseEvent *event);
 };
-////////////////////////////////////////////////////////////////////////////////
-#include "moc.h"
-////////////////////////////////////////////////////////////////////////////////
-GLWidget::GLWidget(QWidget *parent) : QGLWidget(parent) {
+
+GLWidget::GLWidget(QWidget *parent) : QOpenGLWidget(parent) {
     setMouseTracking(true);
-	QTimer *timer = new QTimer(this);
-	connect(timer, SIGNAL(timeout()), this, SLOT(update()));
-	timer->start(10);
+	QBasicTimer *timer = new QBasicTimer();
+	timer->start(30, this);
 }
 void GLWidget::closeEvent(QCloseEvent *event)
 {
 	exit_gui();
 	event->accept();
 }
+void GLWidget::timerEvent(QTimerEvent *)
+{
+	update();
+}
 void GLWidget::initializeGL() {
 
-	int argc=0;char **argv=0;
-	glutInit(&argc,argv);
+	qDebug() << format();
 
-	glewInit();
 	glEnable(GL_BLEND);
 	glBlendFunc (GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
@@ -364,7 +379,7 @@ void GLWidget::initializeGL() {
 
 	gui.global.ptr["GLWidet"]=this;
 
-	resize(1536,850);
+	resize(1000,600);
 }
 
 void GLWidget::resizeGL(int x, int y) {
@@ -424,7 +439,6 @@ void GLWidget::keyReleaseEvent(QKeyEvent* event) {
 		if (!shift) key=key-uchar('A')+uchar('a');
 	}
 	if(key<255) gui.keyb.key[key]=false;
-	//printf("kr %d\n",key);
 	event->ignore();
 	update() ;
 }
@@ -441,14 +455,38 @@ void GLWidget::keyPressEvent(QKeyEvent* event) {
 		if (!shift) key=key-uchar('A')+uchar('a');
 	}
 	if(key<255) gui.keyb.key[key]=true;
-	//printf("kp %d\n",key);
 	event->ignore();
 	update() ;
 }
+
+////////////////////////////////////////////////////////////////////////////////
+
+bool GetCursorPos(POINT *p) { assert(p!=NULL); return 0; }
+
+bool GetWindowPos(POINT *p) { assert(p!=NULL); return 0; }
+
+bool SetCursor(bool show) { return 0; }
+
 ////////////////////////////////////////////////////////////////////////////////
 int main(int argc, char *argv[]) {
 
     QApplication app(argc, argv);
+
+	QSurfaceFormat surface_format = QSurfaceFormat::defaultFormat();
+	surface_format.setAlphaBufferSize( 8 );
+	surface_format.setDepthBufferSize( 24 );
+	// surface_format.setRedBufferSize( 8 );
+	// surface_format.setBlueBufferSize( 8 );
+	// surface_format.setGreenBufferSize( 8 );
+	// surface_format.setOption( QSurfaceFormat::DebugContext );
+	// surface_format.setProfile( QSurfaceFormat::NoProfile );
+	// surface_format.setRenderableType( QSurfaceFormat::OpenGLES );
+	// surface_format.setSamples( 4 );
+	// surface_format.setStencilBufferSize( 8 );
+	// surface_format.setSwapBehavior( QSurfaceFormat::DefaultSwapBehavior );
+	// surface_format.setSwapInterval( 1 );
+	// surface_format.setVersion( 2, 0 );
+	QSurfaceFormat::setDefaultFormat( surface_format );
 
     GLWidget window;
     window.show();
@@ -459,4 +497,4 @@ int main(int argc, char *argv[]) {
 ////////////////////////////////////////////////////////////////////////////////
 
 
-
+#include "MainQT.moc"
