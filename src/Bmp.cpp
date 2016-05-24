@@ -1,10 +1,14 @@
 //#################################################################//
 #include "Bmp.h"
-//#include "error.h"
+#ifdef QT_GUI_LIB
+#include <QImage>
+#else
 #include <IL/devil_cpp_wrapper.hpp>
+#endif
 //#################################################################//
 void init_ilu_lib()
 {
+#ifndef QT_GUI_LIB
 	static bool ini=false;
 
 	if(!ini)
@@ -13,6 +17,7 @@ void init_ilu_lib()
 		iluInit();
 		ini=true;
 	}
+#endif
 }
 //#################################################################//
 Bmp::Bmp()
@@ -43,6 +48,12 @@ void Bmp::save(const char*filename)
 {
 	flip();
 	printf("saving bmp %dx%dx%d\n",width, height, bpp);
+#ifdef QT_GUI_LIB
+	if(bpp==24)
+		QImage(&data[0], width, height, QImage::Format_RGB888).save(filename);
+	else if(bpp==32)
+		QImage(&data[0], width, height, QImage::Format_ARGB32).save(filename);
+#else
 	ILuint imageID;
 	ilGenImages(1, &imageID);
 	ilBindImage(imageID);
@@ -50,7 +61,8 @@ void Bmp::save(const char*filename)
 	if(bpp==32) 	ilTexImage(width, height, 1, bpp/8, IL_RGBA, IL_UNSIGNED_BYTE, &data[0]); //the third agrument is usually always 1 (its depth. Its never 0 and I can't think of a time when its 2)
 	ilEnable(IL_FILE_OVERWRITE);
 	ilSaveImage(filename);	
-	ilDeleteImages(1, &imageID); // Delete the image name. 
+	ilDeleteImages(1, &imageID); // Delete the image name.
+#endif
 	flip();
 }
 //#################################################################//
@@ -145,8 +157,109 @@ void Bmp::set(int x,int y,int b,unsigned char*buffer)
 	if(buffer)memmove(&data[0],buffer,width*height*(bpp/8));
 }
 //#################################################################//
+static void Convert32bitARGBtoRGBA(QImage &q)
+{
+    uint32_t count=0, max=(uint32_t)(q.height()*q.width());
+    uint32_t* p = (uint32_t*)(q.bits());
+    uint32_t n;
+    while( count<max )
+    {
+        n = p[count];   //n = ARGB
+        p[count] =  0x00000000 |
+                ((n<<8)  & 0x0000ff00) |
+                ((n<<8)  & 0x00ff0000) |
+                ((n<<8)  & 0xff000000) |
+                ((n>>24) & 0x000000ff);
+                // p[count] = RGBA
+        count++;
+    }
+}
+
+static void Convert32bitRGBAtoARGB(QImage &q)
+{
+    uint32_t count=0, max=(uint32_t)(q.height()*q.width());
+    uint32_t* p = (uint32_t*)(q.bits());
+    uint32_t n;
+    while( count<max )
+    {
+        n = p[count];   //n = RGBA
+        p[count] =  0x00000000 |
+                ((n>>8)  & 0x000000ff) |
+                ((n>>8)  & 0x0000ff00) |
+                ((n>>8)  & 0x00ff0000) |
+                ((n<<24) & 0xff000000);
+                // p[count] = ARGB
+        count++;
+    }
+}
+
+static void convertFromGLImage(QImage &img, int w, int h, bool alpha_format, bool include_alpha) {
+  if (QSysInfo::ByteOrder == QSysInfo::BigEndian) {
+    // OpenGL gives RGBA; Qt wants ARGB
+    uint *p = (uint*)img.bits();
+    uint *end = p + w*h;
+    if (alpha_format && include_alpha) {
+      while (p < end) {
+        uint a = *p << 24;
+        *p = (*p >> 8) | a;
+        p++;
+      }
+    } else {
+      // This is an old legacy fix for PowerPC based Macs, which
+      // we shouldn't remove
+      while (p < end) {
+        *p = 0xff000000 | (*p>>8);
+        ++p;
+      }
+    }
+  } else {
+    // OpenGL gives ABGR (i.e. RGBA backwards); Qt wants ARGB
+    for (int y = 0; y < h; y++) {
+      uint *q = (uint*)img.scanLine(y);
+      for (int x=0; x < w; ++x) {
+        const uint pixel = *q;
+        if (alpha_format && include_alpha) {
+          *q = ((pixel << 16) & 0xff0000) | ((pixel >> 16) & 0xff)
+              | (pixel & 0xff00ff00);
+        } else {
+          *q = 0xff000000 | ((pixel << 16) & 0xff0000)
+              | ((pixel >> 16) & 0xff) | (pixel & 0x00ff00);
+        }
+        
+        q++;
+      }
+    }
+  }
+}
+
+static void convertFromGLImage(QImage &img) {
+	convertFromGLImage(img,
+		img.width(), img.height(),
+		img.format()==QImage::Format_ARGB32_Premultiplied || img.format()==QImage::Format_ARGB32,
+		true);
+}
+
 void Bmp::load(const char *filename, bool convert32)
 {
+#ifdef QT_GUI_LIB
+	QImage i;
+
+	if(!i.load(filename))
+	{
+		error_stop("Bmp::load file %s not found\n",filename);
+	}
+
+	printf("Bmp::loading %s(%d) : %dx%dx%d \n",filename,i.format(),i.width(),i.height(),i.depth());
+
+	if(i.format()==QImage::Format_ARGB32 || i.format()==QImage::Format_RGB32 || convert32)
+		i=i.convertToFormat(QImage::Format_ARGB32); else i=i.convertToFormat(QImage::Format_RGB888);
+
+	printf("Bmp::loaded %s(%d) : %dx%dx%d \n",filename,i.format(),i.width(),i.height(),i.depth());
+
+	convertFromGLImage(i);
+
+	set(i.width(),i.height(),i.depth(),i.bits());
+#else
 	ilImage i;
 
 	if(!i.Load(filename))
@@ -164,6 +277,7 @@ void Bmp::load(const char *filename, bool convert32)
 	printf("Bmp::loaded %s : %dx%dx%d \n",filename,i.Width(),i.Height(),i.Bpp());
 
 	set(i.Width(),i.Height(),i.Bpp()*8,i.GetData());
+#endif
 }
 
 //#################################################################//
@@ -172,7 +286,7 @@ void Bmp::save_float(const char*filename, float* fdata)
 	if(fdata==0)fdata=(float*)&this->data[0];
 	FILE* fn;
 	if ((fn = fopen (filename,"wb")) == NULL)  error_stop("Bmp::save_float");
-	fwrite(fdata,1,4*width*height,fn);
+	fwrite(fdata,1,(bpp/8)*width*height,fn);
 	fclose(fn);
 }
 //#################################################################//
@@ -181,8 +295,8 @@ bool Bmp::load_float(const char*filename, float* fdata)
 	if (!fdata)fdata=(float*)&data[0];
 
 	FILE* fn;
-	if ((fn = fopen (filename,"rb")) == NULL) return false;// error_stop("Bmp::load_float");
-	fread(fdata,1,4*width*height,fn);
+	if ((fn = fopen (filename,"rb")) == NULL) return false;
+	fread(fdata,1,(bpp/8)*width*height,fn);
 	fclose(fn);
 	return true;
 }

@@ -6,11 +6,12 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-//#include "error.h"
 ///////////////////////////////////////////
-#pragma comment(lib,"DevIL.lib")
-#pragma comment(lib,"ILU.lib")
-#pragma comment(lib,"ILUT.lib")
+#ifdef WIN32
+# pragma comment(lib,"DevIL.lib")
+# pragma comment(lib,"ILU.lib")
+# pragma comment(lib,"ILUT.lib")
+#endif
 ///////////////////////////////////////////
 class Bmp
 {
