@@ -1,3 +1,4 @@
+#ifdef WIN32
 #ifdef _DEBUG
 #pragma comment(lib,"freetype26d.lib")
 #else
@@ -20,3 +21,4 @@
 #pragma comment(lib,"odbc32.lib")
 #pragma comment(lib,"odbccp32.lib")
 #pragma comment(lib,"strmiids.lib")
+#endif // WIN32

@@ -1,6 +1,58 @@
+#ifdef QT_GUI_LIB
+
+#include <assert.h>
+#include <math.h>
+#include <QDebug>
+#include <QElapsedTimer>
+#include <QDir>
+#include <QMutex>
+#include <QWaitCondition>
+#include <QtOpenGL/qgl.h>
+#include <map>
+#include <iostream>
+
+class SleepSimulator {
+     QMutex localMutex;
+     QWaitCondition sleepSimulator;
+public:
+    SleepSimulator() { localMutex.lock(); }
+    void sleep(unsigned long sleepMS) { sleepSimulator.wait(&localMutex, sleepMS); }
+    void CancelSleep() { sleepSimulator.wakeAll(); }
+};
+void Sleep(long ms) {
+	SleepSimulator s;
+	s.sleep(ms);
+}
+
+long timeGetTime() {
+	static QElapsedTimer timer;
+	if (!timer.isValid())
+		timer.start();
+	return timer.elapsed() / 1000;
+}
+
+bool CreateDirectory(const char *path, void *attr) {
+    return QDir().mkpath(path);
+}
+
+#else // QT_GUI_LIB
+
+bool GetWindowPos(POINT *p) {
+	p->x = glutGet((GLenum)GLUT_WINDOW_X);
+	p->x = glutGet((GLenum)GLUT_WINDOW_Y);
+	return true;
+}
+bool SetCursor(bool show) {
+	glutSetCursor(show?GLUT_CURSOR_INHERIT:GLUT_CURSOR_NONE);
+	return true;
+}
+
+#endif
+
 ///////////////////////////////////////////
 #include "core.h"
 ///////////////////////////////////////////
+
 float cubicInterpolate (float p[4], float x) 
 {
 	return p[1] + 0.5 * x*(p[2] - p[0] + x*(2.0*p[0] - 5.0*p[1] + 4.0*p[2] - p[3] + x*(3.0*(p[1] - p[2]) + p[3] - p[0])));
@@ -25,9 +77,9 @@ std::string int_to_str(const int x)
 ///////////////////////////////////////////
 std::string get_pure_filename ( std::string filename )
 {
-	uint pos1 = filename.find_last_of( "/" );
-	uint pos2 = filename.find_last_of( "\\" );
-	uint pos3 = filename.find_last_of( "." );
+	size_t pos1 = filename.find_last_of( "/" );
+	size_t pos2 = filename.find_last_of( "\\" );
+	size_t pos3 = filename.find_last_of( "." );
 
 	if ( pos1 ==  std::string::npos ) pos1 = pos2;
 	if ( pos1 ==  std::string::npos ) pos1 = 0;
@@ -44,8 +96,8 @@ std::string get_pure_filename ( std::string filename )
 ///////////////////////////////////////////
 std::string get_path ( std::string filename )
 {
-	uint pos1 = filename.find_last_of( "/" );
-	uint pos2 = filename.find_last_of( "\\" );
+	size_t pos1 = filename.find_last_of( "/" );
+	size_t pos2 = filename.find_last_of( "\\" );
 
 	if ( pos1 ==  std::string::npos ) pos1 = pos2;
 	if ( pos1 ==  std::string::npos ) return "./";
@@ -94,9 +146,9 @@ std::string get_current_dir()
 
 
 #ifdef WIN32
-#include "dirent_win.h"
+# include "dirent_win.h"
 #else
-#include "dirent.h"
+# include "dirent.h"
 #endif
 
 bool strcmp_lower(char* a,char* b)

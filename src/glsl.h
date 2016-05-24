@@ -60,7 +60,7 @@ public:
 	void link()
 	{
 		program_handle = glCreateProgram();
-		for (int i=0;i<handles.size();i++)
+		for (size_t i=0;i<handles.size();i++)
 		{
 			glAttachShader(program_handle, handles[i]);
 			ogl_check_error();
@@ -80,7 +80,7 @@ public:
 		printf("%s linked successful\n",name.c_str());
 		ogl_check_error();
 	}
-	void setUniformMatrix4fv(char* varname, GLsizei count, GLboolean transpose, GLfloat *value)
+	void setUniformMatrix4fv(const char* varname, GLsizei count, GLboolean transpose, GLfloat *value)
 	{
 		GLint loc = glGetUniformLocation(program_handle,varname);
 		if (loc==-1) 
@@ -90,7 +90,7 @@ public:
 		glUniformMatrix4fv(loc, count, transpose, value);
 		ogl_check_error();
 	}
-	void setUniform1i(char* varname, GLint v0)
+	void setUniform1i(const char* varname, GLint v0)
 	{ 
 		GLint loc = glGetUniformLocation(program_handle,varname);
 		if (loc==-1) 
@@ -100,7 +100,7 @@ public:
 		glUniform1i(loc, v0);
 		ogl_check_error();
 	}
-	void setUniform1f(char* varname, GLfloat v0)
+	void setUniform1f(const char* varname, GLfloat v0)
 	{ 
 		GLint loc = glGetUniformLocation(program_handle,varname);
 		if (loc==-1) 
@@ -110,7 +110,7 @@ public:
 		glUniform1f(loc, v0);
 		ogl_check_error();
 	}
-	void setUniform2f(char* varname, GLfloat v0, GLfloat v1)
+	void setUniform2f(const char* varname, GLfloat v0, GLfloat v1)
 	{ 
 		GLint loc = glGetUniformLocation(program_handle,varname);
 		if (loc==-1) 
@@ -120,7 +120,7 @@ public:
 		glUniform2f(loc, v0, v1);
 		ogl_check_error();
 	}
-	void setUniform3f(char* varname, GLfloat v0, GLfloat v1, GLfloat v2)
+	void setUniform3f(const char* varname, GLfloat v0, GLfloat v1, GLfloat v2)
 	{ 
 		GLint loc = glGetUniformLocation(program_handle,varname);
 		if (loc==-1) 
@@ -130,7 +130,7 @@ public:
 		glUniform3f(loc, v0, v1, v2);
 		ogl_check_error();
 	}
-	void setUniform4f(char* varname, GLfloat v0, GLfloat v1, GLfloat v2, GLfloat v3)
+	void setUniform4f(const char* varname, GLfloat v0, GLfloat v1, GLfloat v2, GLfloat v3)
 	{ 
 		GLint loc = glGetUniformLocation(program_handle,varname);
 		if (loc==-1) 
@@ -140,7 +140,7 @@ public:
 		glUniform4f(loc, v0, v1, v2, v3);
 		ogl_check_error();
 	}
-	void setUniformMatrix4fv(char* varname, int count ,float* val)
+	void setUniformMatrix4fv(const char* varname, int count ,float* val)
 	{ 
 		GLint loc = glGetUniformLocation(program_handle,varname);
 		if (loc==-1) 

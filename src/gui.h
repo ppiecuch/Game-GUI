@@ -1,8 +1,10 @@
 
 #include "core.h"
-#include "Bmp.h"
+#include "bmp.h"
 #include "ogl.h"
+#include "glsl.h"
 #include "drawtext/drawtext.h"
+#include <stdlib.h>
 #include <iostream>
 #include <string>
 #include <vector>
@@ -53,7 +55,7 @@ class ControlList // kind of like map but with selectable order
 	}
 	void push_back(T& t)
 	{
-		push(str("%d",list.size()),t);
+		push(str("%d",int(list.size())),t);
 	}
 	int add(T& t) {push_back(t);return list.size()-1;};
 	int get_index(std::string s)
@@ -69,7 +71,8 @@ class ControlList // kind of like map but with selectable order
 	}
 	inline T& operator [](int i)
 	{
-		while(i>=list.size())push_back(T());
+		T e=T();
+		while(i>=int(list.size())) push_back(e);
 		return *list[i].second;
 	}
 	void erase(std::string s)
@@ -98,7 +101,7 @@ class ControlList // kind of like map but with selectable order
 	}
 };
 
-Shader shader_scaled;//("../shader/SkinScaled");
+Shader shader_scaled;
 Shader shader_inner;
 Shader shader_repeated;
 
@@ -153,7 +156,6 @@ public:
 		if(sx<px[1]+px[3]-px[2]) px1=sx/2;
 		if(sy<py[1]+py[3]-py[2]) py1=sy/2;
 
-		//static Shader shader("../shader/SkinRepeated");
 		shader_repeated.begin();
 		shader_repeated.setUniform1i("tex_skin",0);
 		shader_repeated.setUniform4f("px",px[0],px1,px[2],px[3]);
@@ -166,13 +168,11 @@ public:
 		
 	inline void draw_scaledinner(float x,float y,float sx,float sy,float xmin,float xmax,float ymin,float ymax)
 	{
-		//static Shader shader("../shader/SkinScaledInner");
 		shader_inner.begin();
 		shader_inner.setUniform1i("tex_skin",0);
 		shader_inner.setUniform4f("px",px[0],px[1],px[2],px[3]);
 		shader_inner.setUniform4f("py",py[0],py[1],py[2],py[3]);
 		shader_inner.setUniform4f("pos",sx,sy,0,0);
-		//ogl_drawquad(x+xmin,y,x+xmax,y+sy , xmin,0,xmax,sy );
 		ogl_drawquad(x+xmin,y+ymin,x+xmax,y+ymax , xmin,ymin,xmax,ymax );
 		shader_inner.end();
 	}
@@ -277,7 +277,6 @@ class Gui
 		{
 			if(ptr!=0)return;
 			ptr=p;type=t;w_ptr=win;control_index=index;
-			//if(mouse.button[0])printf("type %d index %d\n",type,index);
 		}
 
 		Active(){ type=NONE;active=0; }
@@ -334,19 +333,63 @@ class Gui
 		public:
 
 		std::string s;
-		void set_text(wchar_t *s)
+		void set_text(const wchar_t *s)
 		{
-			int wlen= lstrlenW( s ); 
-			int len = WideCharToMultiByte( CP_UTF8,0,s,wlen,0,0,NULL, NULL );
-			std::vector<char> result; result.resize(len+10,0);
-			WideCharToMultiByte( CP_UTF8,0,s,wlen,&result[0], len,NULL, NULL );
-			this->s=&result[0];
+			#if defined(QT_CORE_LIB)
+
+				this->s=QString::fromWCharArray(s).toUtf8().constData();
+			
+			#elif defined(WIN32)
+			
+				int wlen = lstrlenW( s ); 
+				int len = WideCharToMultiByte( CP_UTF8,0,s,wlen,0,0,NULL, NULL );
+				std::vector<char> result; result.resize(len+10,0);
+				WideCharToMultiByte( CP_UTF8,0,s,wlen,&result[0], len,NULL, NULL );
+				this->s=&result[0];
+			
+			#else
+			
+				std::string result;
+				if (sizeof(wchar_t) == 1) {
+				  const UTF8 *Start = reinterpret_cast<const UTF8 *>(s->data());
+				  const UTF8 *End =
+				      reinterpret_cast<const UTF8 *>(s->data() + s->size());
+				  if (!isLegalUTF8String(&Start, End))
+				    return false;
+				  result.resize(s->size());
+				  memcpy(&result[0], s->data(), s->size());
+				  return true;
+				} else if (sizeof(wchar_t) == 2) {
+				  return convertUTF16ToUTF8String(
+				      llvm::ArrayRef<UTF16>(reinterpret_cast<const UTF16 *>(s->data()),
+				                            s->size()), result);
+				} else if (sizeof(wchar_t) == 4) {
+				  const UTF32 *Start = reinterpret_cast<const UTF32 *>(s->data());
+				  const UTF32 *End =
+				      reinterpret_cast<const UTF32 *>(s->data() + s->size());
+				  result.resize(UNI_MAX_UTF8_BYTES_PER_CODE_POINT * s->size());
+				  UTF8 *ResultPtr = reinterpret_cast<UTF8 *>(&result[0]);
+				  UTF8 *ResultEnd = reinterpret_cast<UTF8 *>(&result[0] + result.size());
+				  if (ConvertUTF32toUTF8(&Start, End, &ResultPtr, ResultEnd,
+				                         strictConversion) == conversionOK) {
+				    result.resize(reinterpret_cast<char *>(ResultPtr) - &result[0]);
+				    return true;
+				  } else {
+				    result.clear();
+				    return false;
+				  }
+				} else {
+				      std::cerr << "Not supported - wchar_t.");
+				}
+				s = result;
+
+  			#endif
 		}
 
 		String(std::string s=""){ this->s=std::string(s); }
-		String(wchar_t *c){ set_text(c); }
+		String(const wchar_t *c){ set_text(c); }
 		String(const char *c){ this->s=std::string(c); }
-		//String(int i,char* format=0){ if(format)s=str(format,i);else s=str("%d",i); }
+		String(int i,char* format=0){ if(format)s=str(format,i);else s=str("%d",i); }
 		String(double f,char* format=0){ if(format)s=str(format,f);else {s= (f==floor(f)) ? str("%d",int(f)) : str("%.3lf",f);} }
 
 		inline String& operator=(char* c){ s=c;return *this;}
@@ -361,15 +404,15 @@ class Gui
 		inline String operator+(const String& b) {String st=s;st.s.append(b.s);return st;}
 
 		int find(char c,int pos=0){ std::size_t sz=s.find(c,pos); return ( sz == std::string::npos) ? -1 : sz ;};
-		//int find(char *c,int pos=0){ std::size_t sz=s.find(c,pos,strlen(c)); return ( sz == std::string::npos) ? -1 : sz ;};
+		int find(char *c,int pos=0){ std::size_t sz=s.find(c,pos,strlen(c)); return ( sz == std::string::npos) ? -1 : sz ;};
 		int find(String c,int pos=-1){ std::size_t sz=pos < 0 ? s.find(c.s.c_str()):s.find(c.s.c_str(),pos); return ( sz == std::string::npos) ? -1 : sz ;};
 
 		int find_first_of(char c,int pos=0){ std::size_t sz=s.find_first_of(c,pos); return ( sz == std::string::npos) ? -1 : sz ;};
-		//int find_first_of(char *c,int pos=0){ std::size_t sz=s.find_first_of(c,pos,strlen(c)); return ( sz == std::string::npos) ? -1 : sz ;};
+		int find_first_of(char *c,int pos=0){ std::size_t sz=s.find_first_of(c,pos,strlen(c)); return ( sz == std::string::npos) ? -1 : sz ;};
 		int find_first_of(String c,int pos=-1){ std::size_t sz=pos < 0 ? s.find_first_of(c.s.c_str()):s.find_first_of(c.s.c_str(),pos); return ( sz == std::string::npos) ? -1 : sz ;};
 		
 		int find_last_of(char c,int pos=0){ std::size_t sz=s.find_last_of(c,pos); return ( sz == std::string::npos) ? -1 : sz ;};
-		//int find_last_of(char *c,int pos=0){ std::size_t sz=s.find_last_of(c,pos,strlen(c)); return ( sz == std::string::npos) ? -1 : sz ;};
+		int find_last_of(char *c,int pos=0){ std::size_t sz=s.find_last_of(c,pos,strlen(c)); return ( sz == std::string::npos) ? -1 : sz ;};
 		int find_last_of(String c,int pos=-1){ std::size_t sz=pos < 0 ? s.find_last_of(c.s.c_str()):s.find_last_of(c.s.c_str(),pos); return ( sz == std::string::npos) ? -1 : sz ;};
 		
 		inline int length(){return s.length();};
@@ -379,8 +422,8 @@ class Gui
 		
 		void push_back(char c){s.push_back(c);}
 		void replace(String c,String d){ my_replace(c.s,d.s);};
-		void prln(){printf(s.c_str());printf("\n");};
-		void pr(){printf(s.c_str());};
+		void prln(){printf("%s\n",s.c_str());};
+		void pr(){printf("%s",s.c_str());};
 	};
 	
 
@@ -394,10 +437,10 @@ class Gui
 
 		void extend_rect(Rect &r) 
 		{
-			r.sx=max(r.sx,x+sx); 
-			r.sy=max(r.sy,y+sy);
+			r.sx=std::max(r.sx,x+sx); 
+			r.sy=std::max(r.sy,y+sy);
 		}
-		bool is_clipped(int ox,int oy)//, Rect& clip_rect)
+		bool is_clipped(int ox,int oy)
 		{
 			if(x+ox+sx < clip_rect.x) return true; 
 			if(x+ox    > clip_rect.x+clip_rect.sx) return true; 
@@ -412,10 +455,10 @@ class Gui
 	
 		void crop(const Rect &r)
 		{
-			float xx=max(x,r.x);
-			float yy=max(y,r.y);
-			float sxx=max(min(x+sx,r.x+r.sx)-xx,0);
-			float syy=max(min(y+sy,r.y+r.sy)-yy,0);
+			float xx=std::max(x,r.x);
+			float yy=std::max(y,r.y);
+			float sxx=std::max(std::min(x+sx,r.x+r.sx)-xx,0.f);
+			float syy=std::max(std::min(y+sy,r.y+r.sy)-yy,0.f);
 			set_rect(xx,yy,sxx,syy);
 		}
 	};
@@ -483,7 +526,7 @@ class Gui
 			struct dtx_box b;
 			b.x=0;b.y=0;b.width=sx-pad_left-pad_right;b.height=sy-pad_up-pad_down;
 
-			dtx_string(text.c_str(),&b);	
+			dtx_string(text.c_str(),&b); printf();
 			
 			glPopMatrix();
 		};
@@ -587,7 +630,7 @@ class Gui
 
 			Label::draw(ox,oy,manage);		
 			
-			hover=0;//if(manage)pressed&=active;
+			hover=0; //if(manage)pressed&=active;
 		};
 
 	};
@@ -607,7 +650,7 @@ class Gui
 		Combo():Button(){ init();}
 		Combo (int pos_x,int pos_y,
 			int width=global.number["button_size_x"],  // default
-			int height=global.number["button_size_y"]) // default)
+			int height=global.number["button_size_y"]) // default
 			:Button("",pos_x,pos_y,width,height,LEFT)
 		{
 			init();
@@ -640,7 +683,7 @@ class Gui
 				background.set_rect(x,y+sy,sx,sy*item.size());
 				background.draw(ox,oy,0);
 
-				loopi(0,item.size())
+				loopi(0,int(item.size()))
 				{
 					item[i].set_rect(x,y+(1+i)*sy,sx,sy);
 					bool inside=item[i].mouseinside(ox,oy);
@@ -690,7 +733,7 @@ class Gui
 		Radio():Button(){ init();}
 		Radio (int pos_x,int pos_y,
 			int width=global.number["button_size_x"],  // default
-			int height=global.number["button_size_y"]) // default)
+			int height=global.number["button_size_y"]) // default
 			:Button("",pos_x,pos_y,width,height,LEFT)
 		{
 			init();
@@ -704,8 +747,8 @@ class Gui
 			b.pressed=b.hover=b.active=0;
 			if(item.size()==0)b.pressed=1;
 			item.push_back(b);
-			Rect r= (Rect) item[0] ;
-			loopi(1,item.size())r.extend_rect( (Rect) item[i] );
+			Rect r= item[0] ;
+			loopi(1,int(item.size())) r.extend_rect( item[i] );
 			x=r.x;y=r.y;sx=r.sx;sy=r.sy;
 		};
 		void add_item(float x,float y)
@@ -717,12 +760,12 @@ class Gui
 		}
 		void select_index(int i)
 		{
-			loopj(0,item.size())item[j].pressed= i==j ? 1 : 0;
+			loopj(0,int(item.size()))item[j].pressed= i==j ? 1 : 0;
 			selected=i;
 		};
 		void draw(float ox=0,float oy=0,Window* parent=0,int index=0)
 		{
-			loopi(0,item.size())
+			loopi(0,int(item.size()))
 			{
 				if(item[i].active)
 				{
@@ -743,13 +786,13 @@ class Gui
 		bool find_active(int ox=0,int oy=0,Window* parent=0,int index=0)
 		{
 			if(Rect::is_clipped(ox,oy)) return false;
-			loopi(0,item.size())if(item[i].find_active(ox,oy,parent,index)) return true;
+			loopi(0,int(item.size()))if(item[i].find_active(ox,oy,parent,index)) return true;
 			return false;
 		}	
-		void handle_callbacks(Window* parent=0,int index=0)
+		void handle_callbacks(Window* parent=0,size_t index=0)
 		{
 			this->parent=parent;
-			loopi(0,item.size()) item[i].handle_callbacks(parent);
+			loopi(0,int(item.size())) item[i].handle_callbacks(parent);
 		}
 	};
 
@@ -774,7 +817,7 @@ class Gui
 		TextEdit (int maxlength,String linetext,int pos_x,int pos_y,
 			int width=global.number["button_size_x"],  // default
 			int height=global.number["button_size_y"],int flags=NONE,Align alignment=LEFT,
-			String number_unit="cm") // default)
+			String number_unit="cm") // default
 			:Button(linetext,pos_x,pos_y,width,height,alignment)
 		{
 			init();
@@ -933,7 +976,7 @@ class Gui
 			float pos_x=0,float pos_y=0,
 			float width=global.number["button_size_x"],  // default
 			float height=global.number["button_size_y"],
-			Flags flags=VERTICAL) // default)
+			Flags flags=VERTICAL) // default
 			:Button("",pos_x,pos_y,width,height)
 		{
 			init(flags);
@@ -972,7 +1015,7 @@ class Gui
 					button_center.y=clamp(button_center.y,bar.y,bar.y+bar.sy-button_center.sy);
 					val=(button_center.y-bar.y)/(bar.sy-button_center.sy);					
 				}
-				val=clamp(val,0,1);
+				val=clamp(val,0.f,1.f);
 				button_center.draw(ox,oy,1);
 			}
 			if(flags&HORIZONTAL)
@@ -1003,7 +1046,7 @@ class Gui
 					button_center.x=clamp(button_center.x,bar.x,bar.x+bar.sx-button_center.sx);
 					val=(button_center.x-bar.x)/(bar.sx-button_center.sx);					
 				}
-				val=clamp(val,0,1);
+				val=clamp(val,0.f,1.f);
 				button_center.draw(ox,oy,1);
 			}
 		}
@@ -1051,7 +1094,7 @@ class Gui
 			float pos_x=0,float pos_y=0,
 			float width=global.number["button_size_x"],  // default
 			float height=global.number["button_size_y"],
-			int flags=HORIZONTAL) // default)
+			int flags=HORIZONTAL) // default
 			:Button("",pos_x,pos_y,width,height)
 		{
 			init();
@@ -1140,7 +1183,7 @@ class Gui
 		CheckBox (String txt,bool checked,int pos_x,int pos_y,
 			int width=global.number["button_size_x"],  // default
 			int height=global.number["button_size_y"],
-			Align align=Align::CENTER,int flags=0) // default)
+			Align align=Align::CENTER,int flags=0) // default
 			:Button("",pos_x,pos_y,width,height,align,flags)
 		{
 			init();
@@ -1285,12 +1328,12 @@ class Gui
 			if(title.active)
 			{
 				x+=mouse.dx;y+=mouse.dy;float borderdist=20;
-				y=clamp(y,0,screen_resolution_y-title_height);
-				x=clamp(x,0,screen_resolution_x-borderdist);
+				y=clamp(y,0.f,screen_resolution_y-title_height);
+				x=clamp(x,0.f,screen_resolution_x-borderdist);
 				if(parent_rect)
 				{
-					x=min(x,parent_rect->x+parent_rect->sx-borderdist);
-					y=min(y,parent_rect->y+parent_rect->sy-borderdist);
+					x=std::min(x,parent_rect->x+parent_rect->sx-borderdist);
+					y=std::min(y,parent_rect->y+parent_rect->sy-borderdist);
 				}
 				if(!mouse.button[0]) title.set_active(0);
 			}
@@ -1301,7 +1344,7 @@ class Gui
 				if(mouse.button_pressed[0])	{ x0=mouse.x-sx;y0=mouse.y-sy; }
 				else						{ sx=mouse.x-x0;sy=mouse.y-y0; }
 
-				sx=max(sx,minsx);sy=max(sy,minsy);
+				sx=std::max(sx,minsx);sy=std::max(sy,minsy);
 			}
 			if(togglebutton.active&&mouse.button_released[0]) 
 			{
@@ -1355,13 +1398,13 @@ class Gui
 				hscrollbar.set_rect(frame.x,frame.y+frame.sy,frame.sx,hscrollbar.sy);
  				if(hscrollbar_visible)hscrollbar.draw(0,0);			
 			}
-			if(flags&RESIZEABLE)//resize button
+			if(flags&RESIZEABLE) //resize button
 			{	
 				resizebutton.set_rect(sx-resizebutton.sx,sy-resizebutton.sy,resizebutton.sx,resizebutton.sy);
 				resizebutton.draw(x+ox,y+oy);
 			}
-			scrollx=clamp(clientrect.sx-frame.sx-pad_left,0,clientrect.sx)*hscrollbar.val; 
-			scrolly=clamp(clientrect.sy-frame.sy-pad_up,0,clientrect.sy)*vscrollbar.val;
+			scrollx=clamp(clientrect.sx-frame.sx-pad_left,0.f,clientrect.sx)*hscrollbar.val; 
+			scrolly=clamp(clientrect.sy-frame.sy-pad_up,0.f,clientrect.sy)*vscrollbar.val;
 			if(!hscrollbar_visible)scrollx=0;
 			if(!vscrollbar_visible)scrolly=0;
 			float ox_scroll=x+ox-scrollx, oy_scroll=y+oy-scrolly;
@@ -1404,12 +1447,11 @@ class Gui
 			// capture mouse wheel if not done by subwindow.
 			if(flags&VSCROLLBAR) if(hover)
 			{
-				vscrollbar.val=clamp(vscrollbar.val+float(mouse.wheel)*0.1,0,1);
+				vscrollbar.val=clamp(vscrollbar.val+float(mouse.wheel)*0.1f,0.f,1.f);
 				mouse.wheel=0;
 			}
 			
 			// check window stuff
-			
 			loopi(0,window.size())
 			{
 				if(window[i].flags==Window::CLOSED ){ window.erase(i); break;}
@@ -1476,6 +1518,7 @@ class Gui
 			float ox_scroll=x+ox-scrollx, oy_scroll=y+oy-scrolly;
 
 			Rect tmp_cliprect=clip_rect;
+			Rect frame (pad_left+x+ox,pad_up+y+oy,sx-pad_right-pad_left,sy-pad_down-pad_up);
 
 			loopi(0,menu.size())if(menu[i].find_active(ox+x,oy+y,this,index))	goto window_ret_true;
 
@@ -1489,7 +1532,6 @@ class Gui
 			if(flags&HSCROLLBAR) if(hscrollbar_visible)  if(hscrollbar.find_active(0,0,this,index))	goto window_ret_true;
 			if(flags&VSCROLLBAR) if(vscrollbar_visible)  if(vscrollbar.find_active(0,0,this,index))	goto window_ret_true;
 
-			Rect frame (pad_left+x+ox,pad_up+y+oy,sx-pad_right-pad_left,sy-pad_down-pad_up);
 			if(mouse.x>=frame.x)if(mouse.y>=frame.y)
 			if(mouse.x<=frame.sx+frame.x)if(mouse.y<=frame.sy+frame.y)
 			{
@@ -1532,7 +1574,7 @@ class Gui
 		Menu():Button(){ init();}
 		Menu (String text,int pos_x,int pos_y,
 			float width=global.number["button_size_x"],  // default
-			float height=global.number["button_size_y"], // default)
+			float height=global.number["button_size_y"], // default
 			float menuwidth=global.number["menu_size_x"],
 			int flags=NORMAL_MENU)
 			:Button(text,pos_x,pos_y,width,height,LEFT)
@@ -1670,7 +1712,7 @@ class Gui
 
 		enum Flags { MOVABLE=1, LOCKED=0 };
 		
-		int selected,flags; float tabwidth,tabheight;
+		int selected, flags; float tabwidth,tabheight;
 
 		void init(){ type=MENU;selected=0;selected=0;pad_up=pad_down=pad_left=pad_right=5;};
 
@@ -1869,7 +1911,8 @@ class Gui
 
 		this->flags=flags;
 
-		if(!(font = dtx_open_font(global.string["font_name"].c_str(), 0))) error_stop("font file not found");//meiryob.ttc
+		if(!(font = dtx_open_font(global.string["font_name"].c_str(), 0))) error_stop("font file not found");
+		ogl_check_error();
 		dtx_prepare_range(font, global.number["font_size"], 0, 256);			/* ASCII */
 		dtx_prepare_range(font, global.number["font_size"], 0x370, 0x400);		/* greek */
 		dtx_prepare_range(font, global.number["font_size"], 0x400, 0x500);		/* cyrilic */
@@ -1985,17 +2028,18 @@ class Gui
 		// handle activate control
 		if(mouse.button_pressed[0])
 		{
-			/*
+# if 0
 			if(active_control.ptr)
-			printf("windows index %d type %d index %d Rect %.1f %.1f %.1f %.1f\n",
-				active_control.window_index,
-				active_control.type,
-				active_control.control_index,
-				active_control.ptr->x,
-				active_control.ptr->y,
-				active_control.ptr->sx,
-				active_control.ptr->sy
-				);*/
+				printf("windows index %d type %d index %d Rect %.1f %.1f %.1f %.1f\n",
+					active_control.window_index,
+					active_control.type,
+					active_control.control_index,
+					active_control.ptr->x,
+					active_control.ptr->y,
+					active_control.ptr->sx,
+					active_control.ptr->sy
+				);
+# endif // 0
 
 			if(active_control.type!=WINDOW)
 				active_set_active(1);
@@ -2017,11 +2061,14 @@ class Gui
 	void custom_mouse()
 	{
 		// hide windows mouse cursor if required
-		int screen_pos_x = glutGet((GLenum)GLUT_WINDOW_X);
-		int screen_pos_y = glutGet((GLenum)GLUT_WINDOW_Y);
 		static int cur_bef=-1;
-		int cur_now=1;
 		POINT p;
+		int screen_pos_x = 0, screen_pos_y = 0;
+		if (GetWindowPos(&p)) {
+			screen_pos_x = p.x;
+			screen_pos_y = p.y;
+		}
+		int cur_now=1;
 		if (GetCursorPos(&p))
 		{
 			int x=p.x-screen_pos_x;
@@ -2036,11 +2083,8 @@ class Gui
 			cur_now=0;
 		}
 		if(cur_now!=cur_bef) 
-			glutSetCursor(cur_now?GLUT_CURSOR_NONE:GLUT_CURSOR_NONE); 
-
-		//	ShowCursor(cur_now);
+			SetCursor(cur_now?true:true);
 		cur_bef=cur_now;
-
 		// Mouse Arrow
 		static Button b("",0,0,30,30,CENTER,0,0,global.skin["mouse_arrow"]);
 		b.flags=Button::DEACTIVATED;
@@ -2154,8 +2198,9 @@ Gui::Window gui_file_list_window(Gui::String path=".",Gui::String extension="")
 
 	loopi(0,listdirs.size()+listfiles.size())
 	{
-		Gui::String name= i<listdirs.size() ? listdirs[i] : listfiles[i-listdirs.size()] ;
-		Gui::String filesize= i<listdirs.size() ? "<dir>":  gui_file_get_size_str(listfilesize[i-listdirs.size()]) ;
+		const int ldirs = int(listdirs.size());
+		Gui::String name= i<ldirs ? listdirs[i] : listfiles[i-ldirs] ;
+		Gui::String filesize= i<ldirs ? "<dir>":  gui_file_get_size_str(listfilesize[i-ldirs]) ;
 		w.button[i] = Gui::Button(name,0,i*20,280);
 		w.button[i].pad_right=90;
 		w.button[i].skin=gui.global.skin["file_list_window"];

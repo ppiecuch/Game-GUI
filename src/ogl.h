@@ -1,10 +1,9 @@
 #define ogl_check_error() { \
 	GLenum error = glGetError();\
     if( error != GL_NO_ERROR )\
-	{	error_stop( "OpenGL Error: %s\n", gluErrorString( error ) ); } }
+	{	error_stop( "OpenGL Error: %s\n", glErrorString( error ) ); } }
 
-#include "glsl.h"
-#include "fbo.h"
+#include "glu/glu.h"
 
 void ogl_init()
 {
@@ -20,7 +19,9 @@ void ogl_init()
 	glEnable(GL_DEPTH_TEST);
     glClearColor(0, 0, 0, 1);
 
+#ifndef QT_GUI_LIB
 	if( glewInit() != GLEW_OK)error_stop("GLEW initialization failed\n");
+#endif
 
 	ogl_check_error();
 }
@@ -28,7 +29,6 @@ void ogl_init()
 int ogl_tex_new(unsigned int size_x, unsigned int size_y, int filter=GL_LINEAR,int repeat=GL_CLAMP_TO_EDGE,int type1=GL_RGBA,int type2=GL_RGBA,uchar* data_in=0,int type3=GL_UNSIGNED_BYTE)
 {
 	uchar *data=data_in;	
-	//if(!data) data=(uchar*)malloc(size_x*size_y*);//error_stop("ogl_tex_new data==0");
 
 	int id=0;
 
@@ -51,9 +51,7 @@ int ogl_tex_new(unsigned int size_x, unsigned int size_y, int filter=GL_LINEAR,i
 	   filter==GL_NEAREST_MIPMAP_LINEAR || 
 	   filter==GL_LINEAR_MIPMAP_NEAREST || 
 	   filter==GL_NEAREST_MIPMAP_NEAREST)
-
-		
-		gluBuild2DMipmaps( GL_TEXTURE_2D, type1, size_x,   size_y, type2, type3, data );
+		glBuild2DMipmaps( GL_TEXTURE_2D, type1, size_x, size_y, type2, type3, data );
 	else
 		glTexImage2D(GL_TEXTURE_2D, 0, type1, size_x, size_y, 0, type2, type3, data);
 		
@@ -64,15 +62,15 @@ int ogl_tex_new(unsigned int size_x, unsigned int size_y, int filter=GL_LINEAR,i
 	return id;
 }
 
-int ogl_tex_bmp(const Bmp &bmp, int filter=GL_LINEAR,int repeat=GL_REPEAT)//CLAMP_TO_EDGE)
+int ogl_tex_bmp(const Bmp &bmp, int filter=GL_LINEAR, int repeat=GL_REPEAT) //CLAMP_TO_EDGE)
 {
 	if(bmp.bpp==32)
-	return ogl_tex_new(bmp.width, bmp.height,filter,repeat, GL_RGBA, GL_RGBA,(uchar*)&bmp.data[0]);
+		return ogl_tex_new(bmp.width, bmp.height,filter,repeat, GL_RGBA, GL_RGBA,(uchar*)&bmp.data[0]);
 
 	return ogl_tex_new(bmp.width, bmp.height,filter,repeat, GL_RGB, GL_RGB,(uchar*)&bmp.data[0]);
 }
 
-int ogl_tex_float_bmp(const Bmp &bmp, int filter=GL_LINEAR,int repeat=GL_CLAMP_TO_EDGE)
+int ogl_tex_float_bmp(const Bmp &bmp, int filter=GL_LINEAR, int repeat=GL_CLAMP_TO_EDGE)
 {
 	if(bmp.bpp!=32)return -1;
 	return ogl_tex_new(bmp.width, bmp.height,filter,repeat, GL_LUMINANCE16F_ARB, GL_LUMINANCE,(uchar*)&bmp.data[0], GL_FLOAT);
@@ -126,7 +124,7 @@ vec3f ogl_unproject(int x, int y, float winZ=-10)
 
 	if(winZ<-5) winZ=ogl_read_z(x,y);
  
-    gluUnProject( winX, winY, winZ, modelview, projection, viewport, &posX, &posY, &posZ);
+    glUnProject( winX, winY, winZ, modelview, projection, viewport, &posX, &posY, &posZ);
  
     return vec3f(posX, posY, posZ);
 }
@@ -158,14 +156,7 @@ inline void ogl_drawquad(	float x0,float y0,float x1,float y1,
 
 	glDisableClientState(GL_TEXTURE_COORD_ARRAY);
 	glDisableClientState(GL_VERTEX_ARRAY);
-	/*
-	glBegin(GL_QUADS);
-	glTexCoord2f(tx0,ty0);glVertex2f(x0,y0);
-	glTexCoord2f(tx1,ty0);glVertex2f(x1,y0);
-	glTexCoord2f(tx1,ty1);glVertex2f(x1,y1);
-	glTexCoord2f(tx0,ty1);glVertex2f(x0,y1);
-	glEnd();
-	*/
+
 	ogl_check_error();
 }
 
@@ -174,7 +165,7 @@ void ogl_draw_colorquad(
 	vec3f c0,vec3f c1,vec3f c2,vec3f c3)
 {
 	float rx=4,ry=4;
-	loopijk(0,0,0,int(rx),int(ry),4)
+	loopijk(0,0,0,rx,ry,4)
 	{
 		if (k==0)glBegin(GL_QUADS);
 		float a=float(i+1*(k==1||k==2))/rx;
