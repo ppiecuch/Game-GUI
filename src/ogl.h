@@ -26,7 +26,7 @@ void ogl_init()
 	ogl_check_error();
 }
 
-int ogl_tex_new(unsigned int size_x, unsigned int size_y, int filter=GL_LINEAR,int repeat=GL_CLAMP_TO_EDGE,int type1=GL_RGBA,int type2=GL_RGBA,uchar* data_in=0,int type3=GL_UNSIGNED_BYTE)
+int ogl_tex_new(unsigned int size_x, unsigned int size_y, int filter=GL_LINEAR, int repeat=GL_CLAMP_TO_EDGE, int type1=GL_RGBA, int type2=GL_RGBA, uchar* data_in=0, int type3=GL_UNSIGNED_BYTE)
 {
 	uchar *data=data_in;	
 
@@ -44,7 +44,7 @@ int ogl_tex_new(unsigned int size_x, unsigned int size_y, int filter=GL_LINEAR,i
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, filter);ogl_check_error();
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, 
 		(filter==GL_LINEAR_MIPMAP_LINEAR ||
-	   filter==GL_NEAREST_MIPMAP_LINEAR ) ? GL_LINEAR : GL_NEAREST );ogl_check_error();
+	   filter==GL_NEAREST_MIPMAP_LINEAR ) ? GL_LINEAR : GL_NEAREST ); ogl_check_error();
 	
     // buffer data
 	if(filter==GL_LINEAR_MIPMAP_LINEAR ||
@@ -72,7 +72,7 @@ int ogl_tex_bmp(const Bmp &bmp, int filter=GL_LINEAR, int repeat=GL_REPEAT) //CL
 
 int ogl_tex_float_bmp(const Bmp &bmp, int filter=GL_LINEAR, int repeat=GL_CLAMP_TO_EDGE)
 {
-	if(bmp.bpp!=32)return -1;
+	if(bmp.bpp!=32) return -1;
 	return ogl_tex_new(bmp.width, bmp.height,filter,repeat, GL_LUMINANCE16F_ARB, GL_LUMINANCE,(uchar*)&bmp.data[0], GL_FLOAT);
 }
 

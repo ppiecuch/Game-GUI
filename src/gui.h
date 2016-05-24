@@ -173,7 +173,6 @@ public:
 		shader_inner.setUniform4f("px", px[0], px[1], px[2], px[3]);
 		shader_inner.setUniform4f("py", py[0], py[1], py[2], py[3]);
 		shader_inner.setUniform4f("pos", sx, sy, 0, 0);
-		//ogl_drawquad(x+xmin,y,x+xmax,y+sy , xmin,0,xmax,sy );
 		ogl_drawquad(x + xmin, y + ymin, x + xmax, y + ymax, xmin, ymin, xmax, ymax);
 		shader_inner.end();
 	}
@@ -616,7 +615,7 @@ public:
 
 		void draw(float ox = 0, float oy = 0, bool manage = true, float xmin = 0, float xmax = -1, float ymin = 0, float ymax = -1)
 		{
-			if (manage)if (Rect::is_clipped(ox, oy)) return;
+			if (manage) if (Rect::is_clipped(ox, oy)) return;
 
 			if (manage && active && flags != DEACTIVATED)
 			{
@@ -628,9 +627,9 @@ public:
 			if(hover)	tex=skin.tex_hover;
 			if(pressed)	tex=skin.tex_selected;
 
-			ogl_bind(0,tex);  
-			if(tex>0) skin.draw(x+ox,y+oy,sx,sy,xmin,xmax,ymin,ymax);
-			ogl_bind(0,0);
+			ogl_bind(0, tex);  
+			if(tex>0) skin.draw(x+ox, y+oy, sx, sy, xmin, xmax, ymin, ymax);
+			ogl_bind(0, 0);
 
 			Label::draw(ox,oy,manage);		
 			
@@ -953,7 +952,7 @@ public:
 		{
 			this->parent = parent;
 			if (active) { active_control.active = 1; active_control.set(this, type, parent, index); }
-			if (call_init){ call_init = 0; if (callback_init)call_list.push_back(CallParams(callback_init, parent, this, index)); }
+			if (call_init) { call_init = 0; if (callback_init)call_list.push_back(CallParams(callback_init, parent, this, index)); }
 			if (callback_all) call_list.push_back(CallParams(callback_all, parent, this, index));
 			if (callback_text_entered && dirty) call_list.push_back(CallParams(callback_text_entered, parent, this, index));
 			dirty = 0;
@@ -1120,7 +1119,7 @@ public:
 			val = val_min = 0; val_max = 1;
 		};
 
-		Slider():Button(){ init();};
+		Slider() : Button() { init();};
 		Slider (float val_min,float val_max,float val_default,
 			float pos_x=0, float pos_y=0,
 			float width=global.number["button_size_x"],  // default
@@ -1170,7 +1169,7 @@ public:
 			{
 				float slider_pixel_pos = (val - val_min)*sx / (val_max - val_min);
 				button.set_rect(x - sy / 2 + slider_pixel_pos, y, sy, sy); // square shaped button ; todo: add ratio
-				//left.draw(ox, oy, 0, 0, slider_pixel_pos);
+				left.draw(ox, oy, 0, 0, slider_pixel_pos);
 				right.draw(ox, oy, 0, slider_pixel_pos, sx);
 			}
 			else
