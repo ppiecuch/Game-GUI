@@ -40,7 +40,7 @@ struct dtx_box {
 extern "C" {
 #endif
 
-/* Open a truetype/opentype/whatever font.
+/* Open a truetype/opentype/whatever font or precompiled glyphmap (see: dtx_save_glyphmap)
  *
  * If sz is non-zero, the default ASCII glyphmap at the requested point size is
  * automatically created as well, and ready to use.
@@ -48,12 +48,9 @@ extern "C" {
  * To use other unicode ranges and different font sizes you must first call
  * dtx_prepare or dtx_prepare_range before issuing any drawing calls, otherwise
  * nothing will be rendered.
+ * Glyphmap loading works even when compiled without freetype support.
  */
 struct dtx_font *dtx_open_font(const char *fname, int sz);
-/* open a font by loading a precompiled glyphmap (see: dtx_save_glyphmap)
- * this works even when compiled without freetype support
- */
-struct dtx_font *dtx_open_font_glyphmap(const char *fname);
 /* close a font opened by either of the above */
 void dtx_close_font(struct dtx_font *fnt);
 

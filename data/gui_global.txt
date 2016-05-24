@@ -1,7 +1,7 @@
 
 # Font
 
-number font_size 14
+number font_size 12
 string font_name ../data/ipaexg.ttf
 
 vec4 font_color 0 0 0 1
